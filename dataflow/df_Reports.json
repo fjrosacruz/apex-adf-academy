@@ -1,0 +1,261 @@
+{
+	"name": "df_Reports",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ds_asql_ApexGenericDB",
+						"type": "DatasetReference"
+					},
+					"name": "OrdersData",
+					"description": "Get Total Sales per City"
+				},
+				{
+					"dataset": {
+						"referenceName": "ds_asql_ApexGenericDB",
+						"type": "DatasetReference"
+					},
+					"name": "ProductsData"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ds_Reports",
+						"type": "DatasetReference"
+					},
+					"name": "SalesCityReport"
+				},
+				{
+					"dataset": {
+						"referenceName": "ds_Reports",
+						"type": "DatasetReference"
+					},
+					"name": "Products"
+				},
+				{
+					"dataset": {
+						"referenceName": "ds_Reports",
+						"type": "DatasetReference"
+					},
+					"name": "ShipModeReport"
+				},
+				{
+					"dataset": {
+						"referenceName": "ds_Reports",
+						"type": "DatasetReference"
+					},
+					"name": "BestCustomersReport"
+				},
+				{
+					"dataset": {
+						"referenceName": "ds_Reports",
+						"type": "DatasetReference"
+					},
+					"name": "BestProductsReport"
+				},
+				{
+					"dataset": {
+						"referenceName": "ds_Reports",
+						"type": "DatasetReference"
+					},
+					"name": "OrdersReport"
+				}
+			],
+			"transformations": [
+				{
+					"name": "GetTotalSalesCity"
+				},
+				{
+					"name": "RemoveDuplicated"
+				},
+				{
+					"name": "ShipModeFilter"
+				},
+				{
+					"name": "GetMaxSales"
+				},
+				{
+					"name": "SortSales"
+				},
+				{
+					"name": "BestCustomers"
+				},
+				{
+					"name": "ConvertIntoRowsCustomers"
+				},
+				{
+					"name": "SortBestCustomers"
+				},
+				{
+					"name": "GetMaxQuantity"
+				},
+				{
+					"name": "BestProducts"
+				},
+				{
+					"name": "ConvertIntoRowsProducts"
+				},
+				{
+					"name": "SortBestProducts"
+				},
+				{
+					"name": "JoinWithProducts"
+				},
+				{
+					"name": "JoinOrdersProducts"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          RowID as integer,",
+				"          OrderID as string,",
+				"          OrderDate as date,",
+				"          ShipDate as string,",
+				"          ShipMode as string,",
+				"          CustomerID as string,",
+				"          Segment as string,",
+				"          Country as string,",
+				"          City as string,",
+				"          State as string,",
+				"          PostalCode as integer,",
+				"          Region as string,",
+				"          ProductID as string,",
+				"          Sales as decimal(10,2),",
+				"          Quantity as integer,",
+				"          Discount as decimal(2,2),",
+				"          Profit as string,",
+				"          Price as decimal(10,3)",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     isolationLevel: 'READ_UNCOMMITTED',",
+				"     format: 'table') ~> OrdersData",
+				"source(output(",
+				"          ProductID as string,",
+				"          Category as string,",
+				"          SubCategory as string,",
+				"          ProductName as string,",
+				"          Price as decimal(10,3)",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     isolationLevel: 'READ_UNCOMMITTED',",
+				"     format: 'table') ~> ProductsData",
+				"OrdersData aggregate(groupBy(City),",
+				"     TotalSalesbyCity = sum(Sales)) ~> GetTotalSalesCity",
+				"ProductsData aggregate(groupBy(ProductID,",
+				"          Category,",
+				"          SubCategory,",
+				"          ProductName,",
+				"          Price),",
+				"     TotalRows = count(ProductID)) ~> RemoveDuplicated",
+				"OrdersData filter(ShipMode == 'First Class' || ShipMode == 'Same Day') ~> ShipModeFilter",
+				"OrdersData aggregate(groupBy(CustomerID),",
+				"     Customer_Sales = sum(Sales)) ~> GetMaxSales",
+				"GetMaxSales sort(desc(Customer_Sales, true)) ~> SortSales",
+				"SortSales aggregate(Items = topN(CustomerID, toLong(Customer_Sales), 10)) ~> BestCustomers",
+				"BestCustomers foldDown(unroll(Items),",
+				"     mapColumn(",
+				"          CustomerID = Items.value,",
+				"          Customer_Sales = Items.count",
+				"     ),",
+				"     skipDuplicateMapInputs: false,",
+				"     skipDuplicateMapOutputs: false) ~> ConvertIntoRowsCustomers",
+				"ConvertIntoRowsCustomers sort(desc(Customer_Sales, true)) ~> SortBestCustomers",
+				"JoinWithProducts aggregate(groupBy(OrdersData@ProductID,",
+				"          ProductName),",
+				"     Product_Quantity = sum(Quantity)) ~> GetMaxQuantity",
+				"GetMaxQuantity aggregate(Items = topN(ProductName, Product_Quantity, 10)) ~> BestProducts",
+				"BestProducts foldDown(unroll(Items),",
+				"     mapColumn(",
+				"          ProductName = Items.value,",
+				"          Product_Quantity = Items.count",
+				"     ),",
+				"     skipDuplicateMapInputs: false,",
+				"     skipDuplicateMapOutputs: false) ~> ConvertIntoRowsProducts",
+				"ConvertIntoRowsProducts sort(desc(Product_Quantity, true)) ~> SortBestProducts",
+				"OrdersData, ProductsData join(OrdersData@ProductID == ProductsData@ProductID,",
+				"     joinType:'inner',",
+				"     matchType:'exact',",
+				"     ignoreSpaces: false,",
+				"     broadcast: 'auto')~> JoinWithProducts",
+				"OrdersData, ProductsData join(OrdersData@ProductID == ProductsData@ProductID,",
+				"     joinType:'inner',",
+				"     matchType:'exact',",
+				"     ignoreSpaces: false,",
+				"     broadcast: 'auto')~> JoinOrdersProducts",
+				"GetTotalSalesCity sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     partitionFileNames:['SalesByCity.csv'],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> SalesCityReport",
+				"RemoveDuplicated sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     partitionFileNames:['ProductList.csv'],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     mapColumn(",
+				"          ProductID,",
+				"          Category,",
+				"          SubCategory,",
+				"          ProductName,",
+				"          Price",
+				"     ),",
+				"     partitionBy('hash', 1)) ~> Products",
+				"ShipModeFilter sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     partitionFileNames:['ShipModeReport.csv'],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> ShipModeReport",
+				"SortBestCustomers sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     partitionFileNames:['BestCustomersReport.csv'],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> BestCustomersReport",
+				"SortBestProducts sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     partitionFileNames:['BestProductsReport.csv'],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     mapColumn(",
+				"          ProductName,",
+				"          Product_Quantity",
+				"     ),",
+				"     partitionBy('hash', 1)) ~> BestProductsReport",
+				"JoinOrdersProducts sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     partitionFileNames:['OrdersList.csv'],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     mapColumn(",
+				"          RowID,",
+				"          OrderID,",
+				"          OrderDate,",
+				"          ShipDate,",
+				"          ShipMode,",
+				"          CustomerID,",
+				"          Segment,",
+				"          Country,",
+				"          City,",
+				"          State,",
+				"          PostalCode,",
+				"          Region,",
+				"          ProductID = OrdersData@ProductID,",
+				"          Sales,",
+				"          Quantity,",
+				"          Discount,",
+				"          Profit,",
+				"          Price = OrdersData@Price,",
+				"          ProductName",
+				"     ),",
+				"     partitionBy('hash', 1)) ~> OrdersReport"
+			]
+		}
+	}
+}

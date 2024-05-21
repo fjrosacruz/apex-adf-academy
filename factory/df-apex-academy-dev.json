@@ -1,0 +1,9 @@
+{
+	"name": "df-apex-academy-dev",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "0df4c949-93f0-472f-914b-d41a6d49274c",
+		"tenantId": "7a0d3ced-7d39-4119-b9f1-44b6947f0f95"
+	}
+}
