@@ -3,18 +3,52 @@
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
 
+pr: none # Disable pull request triggers.
+
 trigger:
-- main
+  branches:
+    include:
+      - main
 
-pool:
-  # vmImage: ubuntu-latest
-  My Local Pool
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+resources:
+  repositories:
+  - repository: apex-adf-academy
+    type: git
+    name: apex-adf-academy
+    ref: main
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+
+#Deployment variables
+variables:
+  azureSubscription: 'fjrosacruz'
+  SourceDataFactoryName : 'df-apex-academy-dev'
+  DeployDataFactoryName : 'df-apex-academy-dev'
+  DeploymentResourceGroupName : 'Apex_ADF_Training'
+
+
+stages:
+- stage: Release
+  displayName: Release stage
+  jobs:
+    - job: Release
+      displayName: Release job
+      pool:
+        My Local Pool
+      steps:
+        - task: AzurePowerShell@5
+          displayName: Deploy ADF
+          inputs:
+            azureSubscription: '$(azureSubscription)'
+            ScriptType: 'InlineScript'
+            Inline: 
+              'New-AzResourceGroupDeployment 
+              -ResourceGroupName "$(DeploymentResourceGroupName)" 
+              -TemplateParameterFile "$(System.DefaultWorkingDirectory)/$(SourceDataFactoryName)/ARMTemplateParametersForFactory.json" 
+              -TemplateFile "$(System.DefaultWorkingDirectory)/$(SourceDataFactoryName)/ARMTemplateForFactory.json"
+              -factoryName "$(DeployDataFactoryName)"
+              #<parameter-overridden> : <value-to-be-overridden> there are parameters in arm template and overriden by key vault secrets
+              #<parameter-overridden> : <value-to-be-overridden>
+              -Mode "Incremental"'
+            azurePowerShellVersion: 'LatestVersion'
+
